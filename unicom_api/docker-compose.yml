@@ -1,0 +1,81 @@
+version: '3'
+services:
+
+  unicomapi:
+    container_name: unicomapi
+    build:
+      context: .
+      dockerfile: ./docker/php-fpm/Dockerfile
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php-fpm/local.ini:/usr/local/etc/php/conf.d/local.ini
+    links:
+      - mysql
+    networks:
+      - unicom-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: unicom_nginx
+    ports:
+      - "8205:80" #Nuxt port
+      - "8206:81" # Laravel port
+      - "4405:443"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+    links:
+      - unicomweb
+      - unicomapi
+    networks:
+      - unicom-net
+
+  mysql:
+    image: mysql:5.7
+    container_name: unicom_mysql
+    tty: true
+    ports:
+      - 3306
+    volumes:
+      - ./docker/mysql/dbdata/:/docker-entrypoint-initdb.d
+      - ./docker/mysql/my.cnf:/etc/mysql/my.cnf
+      - ../mysql:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: unicom_api
+      MYSQL_ROOT_PASSWORD: root
+    networks:
+        - unicom-net
+
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: unicom_phpmyadmin
+    environment:
+      - PMA_ARBITRARY=1
+      - PMA_HOST=mysql
+      - PMA_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root
+    ports:
+      - 13305:80
+    volumes:
+      - /sessions
+    networks:
+        - unicom-net
+
+  unicomweb:
+    container_name: unicomweb
+    image: unicomweb
+    build:
+      context: .
+      dockerfile: ./docker/web/Dockerfile
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    working_dir: /var/www/app
+    volumes:
+      - ../unicom_web:/var/www/app
+    networks:
+      - unicom-net
+networks:
+  unicom-net:
+    driver: bridge
